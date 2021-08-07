@@ -84,11 +84,13 @@ fi
 OS_ISO_FILE="${VERS_AND_ARCH_X_ISO[$hw_vers_arch_comb]}"
 ARCH_LINUX_ARM_REPO="http://os.archlinuxarm.org/os"
 
+# TODO Tengo que hacerlo público
+RBPI_CONFIG_REPO="https://github.com/ctafur80/rbpi-config.git"
+
 unset hw_vers_arch_comb
 
 BASE_DIR="/root"
 
-curr_dir="$BASE_DIR"
 
 # TODO Comprobar que se está ejecutando desde la carpeta base
 
@@ -234,15 +236,15 @@ if [[ ${#OS_DEVICE_PARTS[@]} -ne ${#curr_parts_in_ext_sd[@]} ]] ; then
 fi
 
 
-[[ -d ${curr_dir}/boot ]] && rm -rf ${curr_dir}/boot
-mkdir ${curr_dir}/boot
+[[ -d ${BASE_DIR}/boot ]] && rm -rf ${BASE_DIR}/boot
+mkdir ${BASE_DIR}/boot
 
-[[ -d ${curr_dir}/root ]] && rm -rf ${curr_dir}/root
-mkdir ${curr_dir}/root
+[[ -d ${BASE_DIR}/root ]] && rm -rf ${BASE_DIR}/root
+mkdir ${BASE_DIR}/root
 
 
-systemd-mount ${mount_dev}1 ${curr_dir}/boot
-systemd-mount ${mount_dev}2 ${curr_dir}/root
+systemd-mount ${mount_dev}1 ${BASE_DIR}/boot
+systemd-mount ${mount_dev}2 ${BASE_DIR}/root
 
 [[ ! -f $OS_ISO_FILE ]] && wget ${ARCH_LINUX_ARM_REPO}/$OS_ISO_FILE
 
@@ -255,11 +257,11 @@ fi
 bsdtar -xpf ${OS_ISO_FILE} -C root
 sync
 
-mv ${curr_dir}/root/boot/* ${curr_dir}/boot/
+mv ${BASE_DIR}/root/boot/* ${BASE_DIR}/boot/
 
 # Comprueba que la partición root está montada
 get_curr_parts_in_ext_sd $mount_dev
-if [[ ${curr_parts_in_ext_sd["${mount_dev}1"]} != "${curr_dir}/root" ]] ; then
+if [[ ${curr_parts_in_ext_sd["${mount_dev}1"]} != "${BASE_DIR}/root" ]] ; then
   "Se ha producido un error. Ahora, la partición ${mount_dev}2 debería estar montada en /root."
 fi
 
@@ -269,13 +271,23 @@ Comrpuebe si está montado /dev/sdX2, pues ahora vamos a habilitar sesión SSH p
 "
 
 # Permito acceso por SSH a la cuenta root
-sed -i "/^#PermitRootLogin prohibit-password$/s/^#//" ${curr_dir}/root/etc/ssh/sshd_config
-sed -i "/^PermitRootLogin prohibit-password$/s/prohibit-password$/yes/" ${curr_dir}/root/etc/ssh/sshd_config
+sed -i "/^#PermitRootLogin prohibit-password$/s/^#//" ${BASE_DIR}/root/etc/ssh/sshd_config
+sed -i "/^PermitRootLogin prohibit-password$/s/prohibit-password$/yes/" ${BASE_DIR}/root/etc/ssh/sshd_config
 
 
-# TODO Copiar los demás scripts en el directorio de root del sistema nuevo.
-# Está pendiente de cómo lo voy a llamar finalmente
-cp -r ${curr_dir}/rbpi-config ${curr_dir}/root/root/
+# Copiar los demás scripts en el directorio de root del sistema nuevo.
+if [[ -z "$( pacman -Q git )" ]] ; then
+  pacman -S git
+fi
+
+if [[ -z "$( pacman -Q git )" ]] ; then
+  sale "Se ha producido un error. No se ha logrado instalar el software git."
+fi
+
+cd ${BASE_DIR}/root
+git clone ${RBPI_CONFIG_REPO}
+
+cd $BASE_DIR
 
 
 read -n 1 -s -r -p "
@@ -287,8 +299,8 @@ el número de particiones que ha creado en el flasheo.
 
 unmount_parts_in_ext_sd $mount_dev
 
-rm -rf ${curr_dir}/boot
-rm -rf ${curr_dir}/root
+rm -rf ${BASE_DIR}/boot
+rm -rf ${BASE_DIR}/root
 
 lsblk
 printf "
